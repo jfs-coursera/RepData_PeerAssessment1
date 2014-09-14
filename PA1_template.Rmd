@@ -1,173 +1,175 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
 output: 
   html_document:
     keep_md: true
 ---
 
+Reproducible Research: Peer Assessment 1
+========================================
+
+Author: jfs<br />
+Date: `r format(Sys.Date(), "%d %b %Y")`
+
+
 ```{r invisible, echo = FALSE, results = "hide"}
-# Setting default locale to display the dates in english
-Sys.setlocale(category = "LC_TIME", locale = "C")
+# Hide warnings, errors and messages
+library(knitr)  ## otherwise, compiling with RStudio gives an error
+opts_chunk$set(echo = TRUE, warning = FALSE, error = FALSE, message = FALSE)
 ```
+
 
 ## Loading and preprocessing the data
 Note: I assume that we already are in the correct working directory.
 
+We read the data directly from the zipped file, and have a look at them:
+```{r loaddata}
+data <- read.csv(unz(description = "activity.zip", filename = "activity.csv"))
+str(data)
+```
+
 The data file contains three variables:
 
-1. **steps**: Number of steps taking in a 5-minute interval. Missing values are
+1. `steps`: Number of steps taking in a 5-minute interval. Missing values are
 coded as NA.
-2. **date**: The date on which the measurement was taken in YYYY-MM-DD format.
-3. **interval**: Identifier for the 5-minute interval in which the measurement was
+2. `date`: The date on which the measurement was taken in YYYY-MM-DD format.
+3. `interval`: Identifier for the 5-minute interval in which the measurement was
 taken.
 
-We read the data directly from the zipped file. We also convert the **date**
-values to type Date (just in case).
-```{r loaddata, results = "hide"}
-data <- read.csv(unz(description = "activity.zip", filename = "activity.csv"))
+We convert the `date values to type Date (just in case).
+```{r datetype}
 data$date <- as.Date(data$date, "%Y-%m-%d")
+str(data$date)
 ```
 
 
 
-## What is mean total number of steps taken per day?
+## What is the mean total number of steps taken per day?
 We plot a histogram of the number of total steps taken each day, ignoring the
 NA values:
 ```{r totalsteps}
 library(ggplot2)
-library(scales)
 
 data2 <- na.omit(data)
-df <- aggregate(x = list(sumsteps = data2$steps), by = list(date = data2$date),
-      FUN = sum)
-df$date <- as.Date(df$date)
+df <- aggregate(x = list(sumsteps = data2$steps),
+                by = list(date = data2$date),
+                FUN = sum)
 
-ggplot(df, aes(x = date, y = sumsteps)) +
-       geom_histogram(stat="identity") +
-       xlab("Day") + ylab("Total number of steps") +
-       theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
-       scale_x_date(labels = date_format("%Y %b %d")) +
+ggplot(df, aes(x = sumsteps)) +
+       geom_histogram(binwidth = 1000) +
+       xlab("Total number of steps") +
        ggtitle("Total Number of Steps per Day")
 ```
 
-We can compute the **mean** and the **median** in two ways:
-
-1. We can use the *summary()* function on the data.frame used above for the
-  plot, and extract the data we want:
-  ```{r summary}
-  summary(df$sumsteps)
-  summary(df$sumsteps)["Mean"]
-  summary(df$sumsteps)["Median"]
-  ``` 
-  (The R console returns Mean = 10770 and Median = 10760)
-2. We can use the *mean()* and *median()* functions:
-  ```{r mean}
-  mean(df$sumsteps)
-  median(df$sumsteps)
-  ``` 
-  (The R console returns Mean = 10766.19 and Median = 10765)
-
-The values given by *summary()* seem to somewhat rounded (and *knitr* seems to
-return rounded values too).
+Computing the mean and the median:
+```{r mean}
+c(mean = mean(df$sumsteps), median = median(df$sumsteps))
+``` 
+(The R console returns Mean = 10766.19 and Median = 10765)
 
 
 
 ## What is the average daily activity pattern?
-(I must say I am not sure if I understand correctly the question here...)
 
 Let's just average the number of steps by 5-minute intervals, without taking
-into account the day each interval belongs to.
+into account the day each interval belongs to, ignoring the NA values.
 ```{r timeseries}
 library(ggplot2)
 
 data2 <- na.omit(data)
-df <- aggregate(x = list(meansteps = data2$steps),
-      by = list(interval = data2$interval),
-      FUN = mean)
+df <- aggregate(x = list(avgsteps = data2$steps),
+                by = list(interval = data2$interval),
+                FUN = mean)
 
-ggplot(df, aes(x = interval, y = meansteps)) +
+ggplot(df, aes(x = interval, y = avgsteps)) +
        geom_line() +
        xlab("5-minute interval") + ylab("Average number of steps") +
        ggtitle("Average Number of Steps across all Days")
 ```
 
-The maximum of the mean of the number of steps is contained in a 5-minute interval:
+The maximum of the mean of the number of steps, i.e., the highest peak in the
+graph, is contained in a 5-minute interval:
 ```{r maxmeaninterval}
-m <- max(df$meansteps)
-d <- df[df$meansteps == m, ]
-d$interval
+maxmean <- df[which.max(df$avgsteps), ]$interval
+maxmean
 ```
-
-Or as a one-liner:
-```{r maxmeaninterval2}
-df[df$meansteps == max(df$meansteps), ]$interval
-```
-
-Or as a cleaner one-liner:
-```{r maxmeaninterval3}
-df[which.max(df$meansteps), ]$interval
-```
+This value, `r maxmean`, corresponds to a moment of the day, namely
+ `r sub("\\.", ":", maxmean/100)`.
+The first thing that crosses the mind is that this
+peak corresponds to the moment where the person goes to work, and/or practices
+sport, and/or takes the children to school, and/or has a walk with the dog,
+or things like that.  Actually, at the end of the day, the peak that could
+correspond to the person going back home, around 1800 and 1930 (i.e., 18:00 and
+19:30), is less than half that high. So we might think there is/are some
+activity/ies in the morning that is/are not performed in the afternoon/evening.
 
 
 
 ## Imputing missing values
-The dataset contains missing values, i.e. rows that are not complete cases:
+The dataset contains a certain number of missing values, i.e., rows that are not
+complete cases:
 ```{r navalues}
 sum(!complete.cases(data))
 ```
-Or, since we know that the NA values are only present in the **steps** column:
+And we can see that the NA values are present only in the `steps` column:
 ```{r navalues2}
-sum(is.na(data$steps))
+colSums(is.na(data))
 ```
 
 To fill the missing data, let's just use the mean of steps for that 5-minute
-interval:
+interval, creating a new column:
 ```{r fillna}
 df <- aggregate(x = list(meansteps = data2$steps),
-      by = list(interval = data2$interval),
-      FUN = mean)
+                by = list(interval = data2$interval),
+                FUN = mean)
+
+# New column named 'meansteps'
 df$meansteps <- round(df$meansteps)
+
+# Merging both dataframes by their common columns, i.e., 'interval'
 data3 <- merge(data, df)
-# Replace NA steps value with meansteps value
+
+# Replace each NA 'steps' value with the corresponding 'meansteps' value
 data3[is.na(data3$steps), ]$steps <- data3[is.na(data3$steps), ]$meansteps
-# Drop the meansteps column
+
+# Drop the 'meansteps' column
 data3 <- within(data3, rm("meansteps"))
 ```
 
-Now we basically copy-paste the first part of the assignment, but we use *data3* as
-the dataset:
+Now we basically copy-paste the code used for the first graph in this document,
+but we use **data3** as the dataset:
 ```{r totalsteps2}
 library(ggplot2)
-library(scales)
 
-df <- aggregate(x = list(sumsteps = data3$steps), by = list(date = data3$date),
-      FUN = sum)
-df$date <- as.Date(df$date)
+df <- aggregate(x = list(sumsteps = data3$steps),
+                by = list(date = data3$date),
+                FUN = sum)
 
-ggplot(df, aes(x = date, y = sumsteps)) +
-       geom_histogram(stat="identity") +
-       xlab("Day") + ylab("Total number of steps") +
-       theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
-       scale_x_date(labels = date_format("%Y %b %d")) +
+ggplot(df, aes(x = sumsteps)) +
+       geom_histogram(binwidth = 1000) +
+       xlab("Total number of steps") +
        ggtitle("Total Number of Steps per Day")
 ```
 ```{r mean2}
-mean(df$sumsteps)
-median(df$sumsteps)
+c(mean = mean(df$sumsteps), median = median(df$sumsteps))
 ``` 
 The values of the mean and the median are really close to those computed in the
-first part of the assignment:
+first part of this document:
 
 - Mean: 10766 here vs 10766 there above
 - Median: 10762 here vs 10765 there above
 
 
+
 ## Are there differences in activity patterns between weekdays and weekends?
 New factor variable:
 ````{r newfactor}
-wend <- weekdays(data3$date) %in% c("Saturday", "Sunday") 
+# Weekend days are Saturday and Sunday (days 6 and 7 of the week), all others
+# are weekdays
+wend <- format(data3$date, "%u") %in% c(6, 7) 
 wend[wend == TRUE] <- "weekend"
 wend[wend == FALSE] <- "weekday"
+
+# Add the new column
 data4 <- cbind(data3, wend)
 ``` 
 
@@ -175,8 +177,8 @@ data4 <- cbind(data3, wend)
 library(ggplot2)
 
 df <- aggregate(x = list(meansteps = data4$steps),
-      by = list(interval = data4$interval, weekend = data4$wend),
-      FUN = mean)
+                by = list(interval = data4$interval, weekend = data4$wend),
+                FUN = mean)
 
 ggplot(df, aes(x = interval, y = meansteps)) +
        geom_line() +
@@ -186,6 +188,16 @@ ggplot(df, aes(x = interval, y = meansteps)) +
        ggtitle("Number of Steps")
 ```
 
-The activity during the weekend seems to be higher then during the weekdays.
+The overall activity during the weekend seems to be higher than during the
+weekdays. On weekdays, the highest activity is rather concentrated in the
+morning, especially between 800 and 930 (i.e., 8:30 and 9:30), but the activity
+starts abruptly at 530 (5:30 in the morning) or so. The activity starts to be
+low at around 1900 or 1930 (19:00 or 19:30).
+
+
+On weekends, the activity is kind of more homogeneously distributed, so to say,
+with the highest peaks in the morning, between 800 and 930. The start of the
+activity, say between 530 and 800, is also slower than on weekdays. The activity
+starts to be low at 2130 or 2200, later than on weekdays.
 
 <hr>
