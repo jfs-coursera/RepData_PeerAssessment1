@@ -1,9 +1,3 @@
----
-output: 
-  html_document:
-    keep_md: true
----
-
 Reproducible Research: Peer Assessment 1
 ========================================
 
